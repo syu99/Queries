@@ -1,94 +1,144 @@
-1. Objectif de la requête
-Cette requête vise à fournir une vue consolidée de plusieurs indicateurs mensuels essentiels pour une entreprise de voyage en ligne :
+# Analyse Consolidée : Revenu, Réservations et Utilisateurs par Mois
 
-Revenu mensuel par type (hôtels et voitures).
-Nombre de réservations mensuelles par type (hôtels et voitures).
-Nombre d’utilisateurs inscrits mensuellement.
-Elle permet de suivre la performance des différents secteurs (hôtels, voitures) et l’acquisition de nouveaux utilisateurs, tout en offrant des insights pour optimiser les stratégies marketing et commerciales.
+## **Description**
 
-2. Analyse des différentes parties de la requête
-2.1. Revenu par mois et par type (hôtel/voiture)
-Pourquoi calculer comme ceci ?
-Revenu des voitures :
+Cette requête SQL fournit une analyse consolidée des principaux indicateurs mensuels pour une entreprise de voyage en ligne. Elle combine trois métriques essentielles :
 
-Le revenu est calculé comme SUM(price * commission) parce que chaque réservation de voiture génère un montant basé sur le prix total de la réservation et une commission appliquée.
-Exemple : Une réservation de voiture à 100€ avec une commission de 20% rapporte 20€.
-Revenu des hôtels :
+1. **Revenu mensuel par type** (hôtel et voiture).
+2. **Nombre de réservations mensuelles par type** (hôtel et voiture).
+3. **Nombre d’utilisateurs inscrits chaque mois**.
 
-Le revenu est calculé comme SUM(room_price * DATE_DIFF(end_date, start_date, DAY) * commission). Cela reflète :
-Le prix de la chambre multiplié par la durée de la réservation (en jours).
-La commission appliquée à la somme totale.
-Exemple : Une chambre à 50€/nuit pour 3 nuits avec une commission de 10% rapporte 15€.
-Pourquoi ces jointures ?
-Car bookings & car_rental_companies :
+Le résultat final est une table unifiée contenant les valeurs agrégées par mois et par type, ce qui facilite l’analyse et la visualisation.
 
-Cette jointure relie les informations de réservation de voiture (car_bookings) avec les détails de la société de location (car_rental_companies), où se trouve le pourcentage de commission.
-Attention : Sans cette jointure, il est impossible de calculer correctement le revenu car la commission est stockée dans une autre table.
-Hotel bookings & hotel_rooms & hotels :
+---
 
-Les informations nécessaires pour calculer les revenus des hôtels sont réparties sur plusieurs tables :
-hotel_bookings contient les informations de réservation (dates, chambres).
-hotel_rooms contient le prix des chambres.
-hotels contient la commission.
-Ces jointures assurent que chaque réservation est correctement associée à son prix et sa commission.
-Attention : Si les conditions de jointure (ON clauses) ne sont pas précises, des doublons ou des erreurs peuvent fausser les calculs.
-2.2. Nombre de réservations par mois et par type
-Pourquoi calculer comme ceci ?
-Les réservations sont comptées simplement via COUNT(booked_at), car chaque enregistrement dans la table représente une réservation unique.
-Séparation par type :
-Les voitures et les hôtels sont traités séparément pour permettre une analyse individuelle de leurs performances.
-Pièges à éviter :
-Données manquantes :
-Si la colonne booked_at contient des valeurs NULL, elles ne seront pas comptées.
-Solution : S'assurer que toutes les réservations ont une date valide ou appliquer un filtre (WHERE booked_at IS NOT NULL).
-Données dupliquées :
-Des doublons dans les tables sources peuvent gonfler artificiellement les chiffres.
-Solution : Vérifiez que les tables ne contiennent pas de doublons, ou utilisez COUNT(DISTINCT <id>) si nécessaire.
-2.3. Nombre d’utilisateurs inscrits par mois
-Pourquoi calculer comme ceci ?
-Les utilisateurs sont comptés via COUNT(user_id), car chaque identifiant utilisateur correspond à une inscription unique.
-La granularité mensuelle est obtenue via DATE_TRUNC(created_at, MONTH), ce qui permet d’agréger les inscriptions par mois.
-Attention :
-Inscriptions multiples :
+## **Structure de la Requête**
 
-Vérifiez que chaque user_id est unique dans la table des utilisateurs.
-Si un utilisateur peut s’inscrire plusieurs fois, vous devrez peut-être utiliser COUNT(DISTINCT user_id).
-Filtres temporels :
+### **1. Revenu par Mois et par Type**
+- **CTEs concernées :**
+  - `car_profit` : Calcule le revenu généré par les réservations de voitures.
+  - `hotel_profit` : Calcule le revenu généré par les réservations d’hôtels.
 
-Si votre table contient des utilisateurs créés avant la période d’analyse, ajoutez un filtre pour limiter les données.
-3. Pourquoi regrouper toutes les données dans une seule table ?
-Avantages :
-Simplicité pour l’analyse :
+- **Logique :**
+  - Le revenu est calculé comme suit :
+    - **Voitures :** `SUM(price * commission)`
+    - **Hôtels :** `SUM(room_price * DATE_DIFF(end_date, start_date, DAY) * commission)`
+  - Ces formules prennent en compte :
+    - Le prix total de la réservation.
+    - La durée (pour les hôtels).
+    - Le pourcentage de commission appliqué.
 
-Les données consolidées sont faciles à visualiser dans un outil BI comme Tableau ou Google Data Studio.
-Chaque ligne contient une valeur (value) et un type (type), ce qui facilite les filtrages et les regroupements.
-Flexibilité :
+- **Colonnes générées :**
+  - `month` : Le mois de la réservation.
+  - `value` : Le revenu total pour le mois.
+  - `type` : Identifie la source du revenu (`car_profit`, `hotel_profit`).
 
-La table combinée permet d’analyser plusieurs indicateurs (revenus, réservations, utilisateurs) en parallèle ou de les comparer directement.
-4. Pièges à éviter dans la combinaison des données
-Manque d’uniformité :
+### **2. Nombre de Réservations par Mois et par Type**
+- **CTEs concernées :**
+  - `car_booking` : Compte les réservations de voitures par mois.
+  - `hotel_booking` : Compte les réservations d’hôtels par mois.
 
-Toutes les CTE doivent produire les mêmes colonnes (month, value, type) pour que le UNION ALL fonctionne correctement.
-Données manquantes ou partielles :
+- **Logique :**
+  - Les réservations sont comptées avec `COUNT(booked_at)`, chaque enregistrement représentant une réservation unique.
 
-Si une source manque de données pour un mois donné, ce mois peut apparaître incomplet ou absent dans les résultats finaux.
-Solution : Ajoutez une table de référence avec tous les mois attendus et effectuez un LEFT JOIN.
-Problèmes de performance :
+- **Colonnes générées :**
+  - `month` : Le mois de la réservation.
+  - `value` : Le nombre total de réservations pour le mois.
+  - `type` : Identifie le type de réservation (`car_booking`, `hotel_booking`).
 
-La combinaison de plusieurs tables volumineuses peut ralentir l’exécution.
-Solution :
-Utilisez des index sur les colonnes fréquemment utilisées dans les jointures (ex. : car_rental_company_id, hotel_id).
-Limitez la période d’analyse avec un filtre temporel (WHERE start_date >= '2023-01-01').
-5. Recommandations pour l’analyse
-Vérifiez les données sources :
+### **3. Nombre d’Utilisateurs Inscrits par Mois**
+- **CTE concernée :**
+  - `users_signed_per_month` : Compte les utilisateurs inscrits par mois.
 
-Inspectez les tables pour identifier d’éventuelles anomalies (doublons, valeurs NULL, incohérences).
-Ajoutez des contextes supplémentaires :
+- **Logique :**
+  - Les inscriptions sont comptées avec `COUNT(user_id)`.
 
-Par exemple, segmentez les résultats par région ou par plateforme (mobile, desktop).
-Suivez l’évolution dans le temps :
+- **Colonnes générées :**
+  - `month` : Le mois de l’inscription.
+  - `value` : Le nombre d’utilisateurs inscrits.
+  - `type` : Identifie le type de données (`user_signup`).
 
-Comparez les performances mensuelles avec celles des mois précédents pour identifier des tendances ou des anomalies.
-Préparez pour la visualisation :
+---
 
-Transformez les types (car_profit, hotel_booking, etc.) en dimensions lisibles pour des graphiques.
+## **Résultats Finaux**
+
+- Les résultats combinent toutes les CTE mentionnées ci-dessus à l’aide de `UNION ALL`.
+- Chaque ligne contient les colonnes suivantes :
+  - **`month`** : Mois (au format `YYYY-MM`).
+  - **`value`** : Valeur agrégée (revenu, nombre de réservations, ou nombre d’inscriptions).
+  - **`type`** : Type de métrique (`car_profit`, `hotel_profit`, `car_booking`, `hotel_booking`, `user_signup`).
+
+### **Exemple de Résultats :**
+
+| Month       | Value   | Type           |
+|-------------|---------|----------------|
+| 2023-10-01  | 15000   | car_profit     |
+| 2023-10-01  | 20000   | hotel_profit   |
+| 2023-10-01  | 250     | car_booking    |
+| 2023-10-01  | 180     | hotel_booking  |
+| 2023-10-01  | 50      | user_signup    |
+
+---
+
+## **Étapes pour Exécuter**
+
+### **1. Configuration des Données**
+Assurez-vous que les tables suivantes existent dans votre dataset BigQuery :
+- `car_bookings` : Détails des réservations de voitures.
+- `car_rental_companies` : Détails des sociétés de location (inclut la commission).
+- `hotel_bookings` : Détails des réservations d’hôtels.
+- `hotel_rooms` : Détails des chambres d’hôtel (inclut les prix).
+- `hotels` : Détails des hôtels (inclut la commission).
+- `users` : Informations sur les utilisateurs.
+
+### **2. Exécution de la Requête**
+- Collez la requête SQL dans l’éditeur BigQuery.
+- Exécutez la requête pour générer les résultats consolidés.
+
+### **3. Vérification des Résultats**
+- Vérifiez que les colonnes `month`, `value`, et `type` sont correctement remplies.
+- Exportez les résultats pour une analyse ou une visualisation dans un outil BI (comme Tableau ou Google Data Studio).
+
+---
+
+## **Pièges à Éviter**
+
+### 1. **Jointures Incorrectes**
+- Assurez-vous que les conditions de jointure (`ON`) sont précises pour éviter les doublons ou des résultats incorrects.
+- Exemple : Dans `car_profit`, la jointure entre `car_bookings` et `car_rental_companies` est essentielle pour récupérer le taux de commission.
+
+### 2. **Données Manquantes**
+- Vérifiez que les colonnes clés (comme `start_date`, `booked_at`, `user_id`) ne contiennent pas de valeurs NULL.
+- **Solution :** Utilisez des filtres `WHERE <colonne> IS NOT NULL` si nécessaire.
+
+### 3. **Problèmes de Performance**
+- Les tables volumineuses peuvent ralentir l’exécution.
+- **Solution :**
+  - Limitez la période d’analyse avec un filtre (`WHERE start_date >= 'YYYY-MM-DD'`).
+  - Assurez-vous que des index sont définis sur les colonnes fréquemment utilisées dans les jointures.
+
+---
+
+## **Utilisations Pratiques**
+1. **Analyse des Revenus :**
+   - Identifier les périodes les plus lucratives pour les hôtels et les voitures.
+   - Comparer les performances entre les deux types.
+
+2. **Analyse des Réservations :**
+   - Suivre les tendances des réservations mensuelles.
+   - Détecter les pics ou les baisses pour ajuster les stratégies marketing.
+
+3. **Suivi des Inscriptions :**
+   - Observer la croissance du nombre d’utilisateurs inscrits par mois.
+   - Corréler les inscriptions avec des campagnes marketing ou des promotions.
+
+---
+
+## **Améliorations Futures**
+1. Ajouter des dimensions supplémentaires (comme la région ou le canal d’acquisition).
+2. Calculer des moyennes mobiles ou des comparaisons année sur année.
+3. Intégrer d’autres indicateurs comme les taux d’annulation ou les montants remboursés.
+
+---
+
+Ce README fournit une explication complète de la requête SQL, ses objectifs, et comment l'exécuter efficacement. 🚀
