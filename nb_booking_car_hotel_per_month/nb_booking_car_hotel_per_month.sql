@@ -2,8 +2,8 @@
 WITH car_booking AS
 (
   SELECT 
-    DATE_TRUNC(start_date,MONTH) as month,
-    COUNT(booked_at) AS booking_per_month,
+    DATE_TRUNC(booked_at,MONTH) as month,
+    COUNT(booking_id) AS booking_per_month,
     'car' AS type
   FROM
     carteldeladata.travel_bc.car_bookings
@@ -12,8 +12,8 @@ WITH car_booking AS
 hotel_booking AS 
 (
   SELECT 
-    DATE_TRUNC(start_date,MONTH) AS month,
-    COUNT(booked_at) AS booking_per_month,
+    DATE_TRUNC(booked_at,MONTH) AS month,
+    COUNT(booking_id) AS booking_per_month,
     'hotel' AS type
   FROM
     carteldeladata.travel_bc.hotel_bookings
